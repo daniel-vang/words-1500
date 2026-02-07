@@ -17,6 +17,7 @@
     "appId": "com.words1500.app",
     "productName": "Words 1500",
     "asar": true,
+    "publish": null,
     "files": [
       "index.html",
       "style.css",
