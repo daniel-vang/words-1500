@@ -5,6 +5,7 @@ const meaningEl = document.getElementById("meaning");
 const nextBtn = document.getElementById("nextBtn");
 const repeatBtn = document.getElementById("repeatBtn");
 const showMeaningBtn = document.getElementById("showMeaningBtn");
+const micBtn = document.getElementById("micBtn");
 const toggleBtns = Array.from(document.querySelectorAll(".toggle-btn"));
 
 let words = [];
@@ -12,6 +13,7 @@ let current = null;
 let recognition = null;
 let listening = false;
 let started = false;
+let micEnabled = true;
 let currentFile = "words-1500.json";
 
 const defaultSources = ["words-1500.json", "words.json", "Worlds.json", "worlds.json"];
@@ -55,6 +57,7 @@ function isCorrect(transcript, word) {
 
 function setStatus(text, type) {
   statusEl.textContent = text;
+  statusEl.classList.toggle("hidden", !text);
   statusEl.classList.remove("ok", "bad");
   if (type) statusEl.classList.add(type);
 }
@@ -74,12 +77,12 @@ function nextWord() {
   wordEl.textContent = current.en;
   phoneticEl.textContent = current.phonetic || "";
   meaningEl.textContent = "";
-  setStatus("请说出中文意思", null);
+  setStatus(micEnabled ? "请说出中文意思" : "", null);
   repeatBtn.disabled = false;
   nextBtn.disabled = false;
   showMeaningBtn.disabled = false;
   speakWord(current);
-  if (recognition && started) {
+  if (micEnabled && recognition && started) {
     startListening();
   }
 }
@@ -155,6 +158,14 @@ function setupRecognition() {
   return rec;
 }
 
+function updateMicUI() {
+  if (!micBtn) return;
+  micBtn.textContent = "麦克风";
+  micBtn.classList.toggle("active", micEnabled);
+  micBtn.setAttribute("aria-pressed", micEnabled ? "true" : "false");
+  if (!micEnabled) stopListening();
+}
+
 function getSources(file) {
   if (file === "words-1500.json") return [...defaultSources];
   return [file];
@@ -205,13 +216,15 @@ async function autoStart() {
       }
       return;
     }
-    recognition = setupRecognition();
     started = true;
   }
 
-  if (!recognition) {
-    setStatus("当前浏览器不支持语音识别", "bad");
-    return;
+  if (micEnabled && !recognition) {
+    recognition = setupRecognition();
+    if (!recognition) {
+      setStatus("当前浏览器不支持语音识别", "bad");
+      return;
+    }
   }
 
   nextWord();
@@ -232,6 +245,28 @@ showMeaningBtn.addEventListener("click", () => {
   }
 });
 
+if (micBtn) {
+  micBtn.addEventListener("click", async () => {
+    micEnabled = !micEnabled;
+    if (micEnabled) {
+      if (!recognition) {
+        recognition = setupRecognition();
+        if (!recognition) {
+          micEnabled = false;
+          updateMicUI();
+          return;
+        }
+      }
+      if (!started) {
+        await autoStart();
+      } else if (current) {
+        startListening();
+      }
+    }
+    updateMicUI();
+  });
+}
+
 toggleBtns.forEach((btn) => {
   btn.addEventListener("click", async () => {
     const file = btn.dataset.file;
@@ -246,4 +281,5 @@ toggleBtns.forEach((btn) => {
   });
 });
 
+updateMicUI();
 autoStart();
