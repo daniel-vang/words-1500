@@ -1,0 +1,45 @@
+{
+  "name": "words-1500",
+  "version": "1.0.0",
+  "private": true,
+  "main": "electron-main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --publish=never",
+    "dist:mac": "electron-builder --mac --publish=never",
+    "dist:win": "electron-builder --win --publish=never"
+  },
+  "devDependencies": {
+    "electron": "^29.4.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.words1500.app",
+    "productName": "Words 1500",
+    "asar": true,
+    "files": [
+      "index.html",
+      "style.css",
+      "app.js",
+      "words-*.js",
+      "words-*.json",
+      "*.txt",
+      "electron-main.js"
+    ],
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.education",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "This app needs microphone access to check spoken answers."
+      }
+    },
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    }
+  }
+}
