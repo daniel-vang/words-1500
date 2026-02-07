@@ -231,7 +231,6 @@ async function autoStart() {
 }
 
 nextBtn.addEventListener("click", () => {
-  stopListening();
   nextWord();
 });
 
@@ -283,3 +282,72 @@ toggleBtns.forEach((btn) => {
 
 updateMicUI();
 autoStart();
+
+const pressedKeys = new Set();
+
+document.addEventListener("keydown", async (event) => {
+  const target = event.target;
+  if (target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) {
+    return;
+  }
+  if (target && target.tagName === "BUTTON" && (event.key === " " || event.key === "Enter")) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
+  const key = event.key || "";
+  if (key === "Shift" || key === "Control" || key === "Alt" || key === "Meta") return;
+  if (event.repeat) return;
+  if (pressedKeys.has(key)) return;
+  pressedKeys.add(key);
+
+  if (!started) {
+    await autoStart();
+  }
+
+  if (key.toLowerCase() === "r") {
+    if (current) speakWord(current);
+    return;
+  }
+
+  if (key.toLowerCase() === "c") {
+    if (current) {
+      const showing = meaningEl.textContent && meaningEl.textContent.trim().length > 0;
+      meaningEl.textContent = showing ? "" : `${current.cn}`;
+    }
+    return;
+  }
+
+  if (key.toLowerCase() === "m") {
+    if (micBtn) {
+      micBtn.click();
+    } else {
+      micEnabled = !micEnabled;
+      if (micEnabled) {
+        if (!recognition) {
+          recognition = setupRecognition();
+          if (!recognition) {
+            micEnabled = false;
+            updateMicUI();
+            return;
+          }
+        }
+        if (!started) {
+          await autoStart();
+        } else if (current) {
+          startListening();
+        }
+      }
+      updateMicUI();
+    }
+    return;
+  }
+
+  stopListening();
+  nextWord();
+});
+
+document.addEventListener("keyup", (event) => {
+  const key = event.key || "";
+  pressedKeys.delete(key);
+});
