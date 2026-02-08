@@ -13,7 +13,7 @@ let current = null;
 let recognition = null;
 let listening = false;
 let started = false;
-let micEnabled = true;
+let micEnabled = false;
 let currentFile = "words-1500.json";
 
 const defaultSources = ["words-1500.json", "words.json", "Worlds.json", "worlds.json"];
