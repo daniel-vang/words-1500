@@ -36,7 +36,7 @@ jobs:
           name: dist-${{ matrix.os }}
           path: dist/*
 
-  publish-release:
+  publish:
     if: github.event_name == 'release'
     needs: [build]
     runs-on: ubuntu-latest
@@ -51,3 +51,32 @@ jobs:
         with:
           files: |
             dist-artifacts/**/*
+
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare Pages files
+        run: |
+          set -euo pipefail
+          mkdir -p dist-pages
+          cp index.html style.css app.js words-1500.js words-3000.js words-1500.json words-3000.json dist-pages/
+          touch dist-pages/.nojekyll
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-pages
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
