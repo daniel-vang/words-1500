@@ -351,3 +351,158 @@ document.addEventListener("keyup", (event) => {
   const key = event.key || "";
   pressedKeys.delete(key);
 });
+
+// --- Touch overlay: create six absolute zones around `.app` and bind actions ---
+(function () {
+  const overlay = document.getElementById("touch-overlay");
+  if (!overlay) return;
+  const areas = Array.from(overlay.querySelectorAll(".touch-area"));
+  const appEl = document.querySelector(".app");
+
+  function forwardIfOverApp(x, y) {
+    const list = document.elementsFromPoint(x, y);
+    if (!list || !list.length) return false;
+    for (const el of list) {
+      if (!el) continue;
+      if (overlay.contains(el)) continue;
+      if (appEl && appEl.contains(el)) {
+        const evt = new MouseEvent("click", {
+          bubbles: true,
+          cancelable: true,
+          clientX: x,
+          clientY: y,
+        });
+        el.dispatchEvent(evt);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function handleEvent(e) {
+    const p = e.touches ? e.touches[0] : e;
+    const x = p.clientX;
+    const y = p.clientY;
+    if (forwardIfOverApp(x, y)) return;
+
+    const zone = this.dataset.zone;
+    if (zone === "tl" || zone === "tr") {
+      // reserved for previous button (not implemented)
+      return;
+    }
+    if (zone === "tm") {
+      if (showMeaningBtn) showMeaningBtn.click();
+      return;
+    }
+    if (zone === "bm") {
+      if (repeatBtn) repeatBtn.click();
+      return;
+    }
+    if (zone === "bl" || zone === "br") {
+      if (nextBtn) nextBtn.click();
+      return;
+    }
+  }
+
+  function updateTouchAreas() {
+    if (!appEl) return;
+    const appRect = appEl.getBoundingClientRect();
+    const vw = Math.max(window.innerWidth || 0, document.documentElement.clientWidth);
+    const vh = Math.max(window.innerHeight || 0, document.documentElement.clientHeight);
+
+    areas.forEach((area) => {
+      const zone = area.dataset.zone;
+      let left = 0,
+        top = 0,
+        width = 0,
+        height = 0;
+      if (zone === "tl") {
+        left = 0;
+        top = 0;
+        width = Math.max(0, appRect.left);
+        height = Math.max(0, appRect.top);
+      } else if (zone === "tm") {
+        left = Math.max(0, appRect.left);
+        top = 0;
+        width = Math.max(0, appRect.width);
+        height = Math.max(0, appRect.top);
+      } else if (zone === "tr") {
+        left = Math.max(0, appRect.right);
+        top = 0;
+        width = Math.max(0, vw - appRect.right);
+        height = Math.max(0, appRect.top);
+      } else if (zone === "bl") {
+        left = 0;
+        top = Math.max(0, appRect.bottom);
+        width = Math.max(0, appRect.left);
+        height = Math.max(0, vh - appRect.bottom);
+      } else if (zone === "bm") {
+        left = Math.max(0, appRect.left);
+        top = Math.max(0, appRect.bottom);
+        width = Math.max(0, appRect.width);
+        height = Math.max(0, vh - appRect.bottom);
+      } else if (zone === "br") {
+        left = Math.max(0, appRect.right);
+        top = Math.max(0, appRect.bottom);
+        width = Math.max(0, vw - appRect.right);
+        height = Math.max(0, vh - appRect.bottom);
+      }
+
+      area.style.left = left + "px";
+      area.style.top = top + "px";
+      area.style.width = width + "px";
+      area.style.height = height + "px";
+
+      if (width > 0 && height > 0) {
+        area.style.pointerEvents = "auto";
+      } else {
+        area.style.pointerEvents = "none";
+      }
+    });
+  }
+
+  window.addEventListener("resize", updateTouchAreas);
+  window.addEventListener("scroll", updateTouchAreas, true);
+  setTimeout(updateTouchAreas, 30);
+
+  areas.forEach((a) => {
+    if (window.PointerEvent) {
+      a.addEventListener("pointerdown", function (ev) {
+        // handle touch/pen on press
+        if (ev.pointerType === "mouse") return;
+        ev.preventDefault();
+        handleEvent.call(this, ev);
+      });
+
+      a.addEventListener("pointerup", function (ev) {
+        // handle mouse on release
+        if (ev.pointerType === "mouse") {
+          ev.preventDefault();
+          handleEvent.call(this, ev);
+        }
+      });
+
+      // block click events to avoid duplicate handling when pointer events are supported
+      a.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      });
+    } else {
+      // fallback for older browsers: touchstart for touch, click for mouse
+      a.addEventListener(
+        "touchstart",
+        function (ev) {
+          ev.preventDefault();
+          handleEvent.call(this, ev);
+        },
+        { passive: false }
+      );
+      a.addEventListener("click", function (ev) {
+        handleEvent.call(this, ev);
+      });
+    }
+  });
+
+  // initial calc
+  updateTouchAreas();
+})();

@@ -229,3 +229,23 @@ button:disabled {
     align-items: stretch;
   }
 }
+
+/* Invisible full-screen 2x3 touch areas for touch optimization.
+   These cover the viewport but forward touches that land on the .app element.
+   No visible styles or animations. */
+#touch-overlay{
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none; /* container itself doesn't block; children will be positioned and enabled */
+}
+#touch-overlay .touch-area{
+  position: fixed;
+  pointer-events: none; /* dynamically enabled when area has size and does not intersect .app */
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+
+/* no visual outline, no hover/focus styles */
+#touch-overlay .touch-area:focus{outline: none;}
