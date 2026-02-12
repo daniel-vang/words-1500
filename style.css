@@ -125,6 +125,21 @@ body {
   border-color: transparent;
 }
 
+.help-toggle {
+  border-radius: 999px;
+  padding: clamp(6px, 1.4vw, 10px) clamp(12px, 3.2vw, 18px);
+  font-size: clamp(12px, 2.4vw, 14px);
+  border: 1px solid rgba(31, 42, 46, 0.2);
+  background: transparent;
+  color: var(--ink);
+}
+
+.help-toggle.active {
+  background: rgba(31, 42, 46, 0.1);
+  box-shadow: 0 10px 20px rgba(31, 42, 46, 0.18);
+  border-color: transparent;
+}
+
 .status {
   font-size: clamp(11px, 2.1vw, 13px);
   padding: clamp(8px, 2vw, 12px) clamp(10px, 2.4vw, 16px);
@@ -249,3 +264,42 @@ button:disabled {
 
 /* no visual outline, no hover/focus styles */
 #touch-overlay .touch-area:focus{outline: none;}
+
+#touch-overlay.help-on .touch-area{
+  background: rgba(209, 123, 73, 0.22);
+  border: 1px solid rgba(31, 42, 46, 0.2);
+  backdrop-filter: blur(1px);
+}
+
+#touch-overlay.help-on .touch-area::after{
+  content: attr(data-label);
+  position: absolute;
+  inset: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(12px, 3vw, 18px);
+  font-weight: 700;
+  color: #1f2a2e;
+  background: rgba(255, 255, 255, 0.65);
+  border-radius: 10px;
+  text-align: center;
+}
+
+#touch-overlay.help-on .touch-area[data-zone="tl"],
+#touch-overlay.help-on .touch-area[data-zone="tr"]{
+  background: rgba(64, 125, 209, 0.22);
+}
+
+#touch-overlay.help-on .touch-area[data-zone="tm"]{
+  background: rgba(65, 169, 118, 0.22);
+}
+
+#touch-overlay.help-on .touch-area[data-zone="bm"]{
+  background: rgba(209, 123, 73, 0.24);
+}
+
+#touch-overlay.help-on .touch-area[data-zone="bl"],
+#touch-overlay.help-on .touch-area[data-zone="br"]{
+  background: rgba(216, 84, 103, 0.22);
+}

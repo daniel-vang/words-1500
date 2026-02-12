@@ -6,6 +6,8 @@ const nextBtn = document.getElementById("nextBtn");
 const repeatBtn = document.getElementById("repeatBtn");
 const showMeaningBtn = document.getElementById("showMeaningBtn");
 const micBtn = document.getElementById("micBtn");
+const helpBtn = document.getElementById("helpBtn");
+const overlayEl = document.getElementById("touch-overlay");
 const toggleBtns = Array.from(document.querySelectorAll(".toggle-btn"));
 
 let words = [];
@@ -17,6 +19,7 @@ let micEnabled = false;
 let currentFile = "words-1500.json";
 let history = [];
 let historyIndex = -1;
+let helpActive = false;
 
 const defaultSources = ["words-1500.json", "words.json", "Worlds.json", "worlds.json"];
 
@@ -195,6 +198,15 @@ function updateMicUI() {
   if (!micEnabled) stopListening();
 }
 
+function setHelp(active) {
+  helpActive = active;
+  if (overlayEl) overlayEl.classList.toggle("help-on", helpActive);
+  if (helpBtn) {
+    helpBtn.classList.toggle("active", helpActive);
+    helpBtn.setAttribute("aria-pressed", helpActive ? "true" : "false");
+  }
+}
+
 function getSources(file) {
   if (file === "words-1500.json") return [...defaultSources];
   return [file];
@@ -299,6 +311,22 @@ if (micBtn) {
   });
 }
 
+if (helpBtn) {
+  helpBtn.addEventListener("click", () => {
+    setHelp(!helpActive);
+  });
+}
+
+document.addEventListener(
+  "pointerdown",
+  (event) => {
+    if (!helpActive) return;
+    if (helpBtn && helpBtn.contains(event.target)) return;
+    setHelp(false);
+  },
+  { capture: true }
+);
+
 toggleBtns.forEach((btn) => {
   btn.addEventListener("click", async () => {
     const file = btn.dataset.file;
@@ -387,7 +415,7 @@ document.addEventListener("keyup", (event) => {
 
 // --- Touch overlay: create six absolute zones around `.app` and bind actions ---
 (function () {
-  const overlay = document.getElementById("touch-overlay");
+  const overlay = overlayEl;
   if (!overlay) return;
   const areas = Array.from(overlay.querySelectorAll(".touch-area"));
   const appEl = document.querySelector(".app");
@@ -416,6 +444,10 @@ document.addEventListener("keyup", (event) => {
     const p = e.touches ? e.touches[0] : e;
     const x = p.clientX;
     const y = p.clientY;
+    if (helpActive) {
+      setHelp(false);
+      return;
+    }
     if (forwardIfOverApp(x, y)) return;
 
     const zone = this.dataset.zone;
