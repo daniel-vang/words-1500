@@ -509,7 +509,7 @@ document.addEventListener("keyup", (event) => {
       prevWord();
       return;
     }
-    if (zone === "tm") {
+    if (zone === "tm" || zone === "rm") {
       showMeaning();
       return;
     }
@@ -553,6 +553,11 @@ document.addEventListener("keyup", (event) => {
         left = 0;
         top = Math.max(0, appRect.top);
         width = Math.max(0, appRect.left);
+        height = Math.max(0, appRect.height);
+      } else if (zone === "rm") {
+        left = Math.max(0, appRect.right);
+        top = Math.max(0, appRect.top);
+        width = Math.max(0, vw - appRect.right);
         height = Math.max(0, appRect.height);
       } else if (zone === "tr") {
         left = Math.max(0, appRect.right);
