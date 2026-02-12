@@ -15,6 +15,8 @@ let listening = false;
 let started = false;
 let micEnabled = false;
 let currentFile = "words-1500.json";
+let history = [];
+let historyIndex = -1;
 
 const defaultSources = ["words-1500.json", "words.json", "Worlds.json", "worlds.json"];
 
@@ -71,9 +73,8 @@ function speakWord(word) {
   speechSynthesis.speak(utter);
 }
 
-function nextWord() {
-  if (!words.length) return;
-  current = words[Math.floor(Math.random() * words.length)];
+function renderWord(word) {
+  current = word;
   wordEl.textContent = current.en;
   phoneticEl.textContent = current.phonetic || "";
   meaningEl.textContent = "";
@@ -85,6 +86,29 @@ function nextWord() {
   if (micEnabled && recognition && started) {
     startListening();
   }
+}
+
+function nextWord() {
+  if (!words.length) return;
+  if (historyIndex < history.length - 1) {
+    historyIndex += 1;
+    renderWord(history[historyIndex]);
+    return;
+  }
+  const pick = words[Math.floor(Math.random() * words.length)];
+  history.push(pick);
+  historyIndex = history.length - 1;
+  renderWord(pick);
+}
+
+function prevWord() {
+  if (!history.length) return;
+  if (historyIndex <= 0) {
+    setStatus("已经是第一个单词", null);
+    return;
+  }
+  historyIndex -= 1;
+  renderWord(history[historyIndex]);
 }
 
 function startListening() {
@@ -119,6 +143,7 @@ function setupRecognition() {
 
     const ok = isCorrect(transcript, current);
     const wantsNext = /(?:下一个|继续|next)/i.test(transcript);
+    const wantsPrev = /(?:上一个|上个|previous|prev|back)/i.test(transcript);
     const wantsRepeat = /(?:朗读|read|repeat)/i.test(transcript);
     const wantsChinese = /(?:中文|汉语|意思)/i.test(transcript);
     if (ok) {
@@ -131,6 +156,10 @@ function setupRecognition() {
     listening = false;
     if (wantsNext) {
       nextWord();
+      return;
+    }
+    if (wantsPrev) {
+      prevWord();
       return;
     }
     if (wantsRepeat) {
@@ -183,6 +212,8 @@ function loadWordsFromInline(file) {
 
 async function loadWords(file) {
   words = [];
+  history = [];
+  historyIndex = -1;
   if (loadWordsFromInline(file)) return true;
   const sources = getSources(file);
   for (const name of sources) {
@@ -193,6 +224,8 @@ async function loadWords(file) {
       const list = extractWords(data);
       if (list.length) {
         words = list;
+        history = [];
+        historyIndex = -1;
         return true;
       }
     } catch (err) {
@@ -387,7 +420,7 @@ document.addEventListener("keyup", (event) => {
 
     const zone = this.dataset.zone;
     if (zone === "tl" || zone === "tr") {
-      // reserved for previous button (not implemented)
+      prevWord();
       return;
     }
     if (zone === "tm") {
