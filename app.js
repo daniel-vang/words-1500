@@ -367,16 +367,6 @@ if (helpBtn) {
   });
 }
 
-document.addEventListener(
-  "pointerdown",
-  (event) => {
-    if (!helpActive) return;
-    if (helpBtn && helpBtn.contains(event.target)) return;
-    setHelp(false);
-  },
-  { capture: true }
-);
-
 toggleBtns.forEach((btn) => {
   btn.addEventListener("click", async () => {
     const file = btn.dataset.file;
@@ -498,10 +488,6 @@ document.addEventListener("keyup", (event) => {
     const p = e.touches ? e.touches[0] : e;
     const x = p.clientX;
     const y = p.clientY;
-    if (helpActive) {
-      setHelp(false);
-      return;
-    }
     if (forwardIfOverApp(x, y)) return;
 
     const zone = this.dataset.zone;
