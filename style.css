@@ -29,6 +29,27 @@ body {
   padding: 32px 16px;
 }
 
+.stats {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 248, 239, 0.92);
+  border: 1px solid rgba(31, 42, 46, 0.12);
+  box-shadow: 0 12px 28px rgba(31, 42, 46, 0.18);
+  color: var(--ink);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: clamp(12px, 2.4vw, 14px);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  z-index: 10000;
+}
+
+.stats.hidden {
+  display: none;
+}
+
 .app {
   width: min(900px, 100%);
   display: grid;

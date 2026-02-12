@@ -8,6 +8,7 @@ const showMeaningBtn = document.getElementById("showMeaningBtn");
 const micBtn = document.getElementById("micBtn");
 const helpBtn = document.getElementById("helpBtn");
 const overlayEl = document.getElementById("touch-overlay");
+const statsEl = document.getElementById("stats");
 const toggleBtns = Array.from(document.querySelectorAll(".toggle-btn"));
 
 let words = [];
@@ -20,6 +21,9 @@ let currentFile = "words-1500.json";
 let history = [];
 let historyIndex = -1;
 let helpActive = false;
+let statsVisible = false;
+const learnedWords = new Set();
+const meaningWords = new Set();
 
 const defaultSources = ["words-1500.json", "words.json", "Worlds.json", "worlds.json"];
 
@@ -76,6 +80,50 @@ function speakWord(word) {
   speechSynthesis.speak(utter);
 }
 
+function wordKey(word) {
+  if (!word) return "";
+  return `${word.en}||${word.cn || ""}`;
+}
+
+function updateStats() {
+  if (!statsEl) return;
+  if (!statsVisible) {
+    statsEl.classList.add("hidden");
+    return;
+  }
+  statsEl.classList.remove("hidden");
+  statsEl.textContent = `已学 ${learnedWords.size} 个 · 中文 ${meaningWords.size} 个`;
+}
+
+function markLearned(word) {
+  const key = wordKey(word);
+  if (!key) return;
+  if (!learnedWords.has(key)) {
+    learnedWords.add(key);
+    updateStats();
+  }
+}
+
+function markMeaning(word) {
+  const key = wordKey(word);
+  if (!key) return;
+  if (!meaningWords.has(key)) {
+    meaningWords.add(key);
+    updateStats();
+  }
+}
+
+function toggleStats() {
+  statsVisible = !statsVisible;
+  updateStats();
+}
+
+function showMeaning() {
+  if (!current) return;
+  meaningEl.textContent = `${current.cn}`;
+  markMeaning(current);
+}
+
 function renderWord(word) {
   current = word;
   wordEl.textContent = current.en;
@@ -85,6 +133,7 @@ function renderWord(word) {
   repeatBtn.disabled = false;
   nextBtn.disabled = false;
   showMeaningBtn.disabled = false;
+  markLearned(current);
   speakWord(current);
   if (micEnabled && recognition && started) {
     startListening();
@@ -154,7 +203,7 @@ function setupRecognition() {
     } else {
       setStatus(`不太对：${transcript}`, "bad");
     }
-    meaningEl.textContent = `${current.cn}`;
+    showMeaning();
 
     listening = false;
     if (wantsNext) {
@@ -169,7 +218,7 @@ function setupRecognition() {
       speakWord(current);
     }
     if (wantsChinese) {
-      meaningEl.textContent = `${current.cn}`;
+      showMeaning();
     }
     if (ok) {
       setTimeout(() => {
@@ -226,6 +275,9 @@ async function loadWords(file) {
   words = [];
   history = [];
   historyIndex = -1;
+  learnedWords.clear();
+  meaningWords.clear();
+  updateStats();
   if (loadWordsFromInline(file)) return true;
   const sources = getSources(file);
   for (const name of sources) {
@@ -284,9 +336,7 @@ repeatBtn.addEventListener("click", () => {
 });
 
 showMeaningBtn.addEventListener("click", () => {
-  if (current) {
-    meaningEl.textContent = `${current.cn}`;
-  }
+  showMeaning();
 });
 
 if (micBtn) {
@@ -374,7 +424,11 @@ document.addEventListener("keydown", async (event) => {
   if (key.toLowerCase() === "c") {
     if (current) {
       const showing = meaningEl.textContent && meaningEl.textContent.trim().length > 0;
-      meaningEl.textContent = showing ? "" : `${current.cn}`;
+      if (showing) {
+        meaningEl.textContent = "";
+      } else {
+        showMeaning();
+      }
     }
     return;
   }
@@ -456,7 +510,11 @@ document.addEventListener("keyup", (event) => {
       return;
     }
     if (zone === "tm") {
-      if (showMeaningBtn) showMeaningBtn.click();
+      showMeaning();
+      return;
+    }
+    if (zone === "lm") {
+      toggleStats();
       return;
     }
     if (zone === "bm") {
@@ -491,6 +549,11 @@ document.addEventListener("keyup", (event) => {
         top = 0;
         width = Math.max(0, appRect.width);
         height = Math.max(0, appRect.top);
+      } else if (zone === "lm") {
+        left = 0;
+        top = Math.max(0, appRect.top);
+        width = Math.max(0, appRect.left);
+        height = Math.max(0, appRect.height);
       } else if (zone === "tr") {
         left = Math.max(0, appRect.right);
         top = 0;
