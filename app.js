@@ -532,6 +532,8 @@ document.addEventListener("keyup", (event) => {
     const appRect = appEl.getBoundingClientRect();
     const vw = Math.max(window.innerWidth || 0, document.documentElement.clientWidth);
     const vh = Math.max(window.innerHeight || 0, document.documentElement.clientHeight);
+    const col1 = vw / 3;
+    const col2 = (vw * 2) / 3;
 
     areas.forEach((area) => {
       const zone = area.dataset.zone;
@@ -542,12 +544,12 @@ document.addEventListener("keyup", (event) => {
       if (zone === "tl") {
         left = 0;
         top = 0;
-        width = Math.max(0, appRect.left);
+        width = Math.max(0, col1);
         height = Math.max(0, appRect.top);
       } else if (zone === "tm") {
-        left = Math.max(0, appRect.left);
+        left = Math.max(0, col1);
         top = 0;
-        width = Math.max(0, appRect.width);
+        width = Math.max(0, col2 - col1);
         height = Math.max(0, appRect.top);
       } else if (zone === "lm") {
         left = 0;
@@ -560,24 +562,24 @@ document.addEventListener("keyup", (event) => {
         width = Math.max(0, vw - appRect.right);
         height = Math.max(0, appRect.height);
       } else if (zone === "tr") {
-        left = Math.max(0, appRect.right);
+        left = Math.max(0, col2);
         top = 0;
-        width = Math.max(0, vw - appRect.right);
+        width = Math.max(0, vw - col2);
         height = Math.max(0, appRect.top);
       } else if (zone === "bl") {
         left = 0;
         top = Math.max(0, appRect.bottom);
-        width = Math.max(0, appRect.left);
+        width = Math.max(0, col1);
         height = Math.max(0, vh - appRect.bottom);
       } else if (zone === "bm") {
-        left = Math.max(0, appRect.left);
+        left = Math.max(0, col1);
         top = Math.max(0, appRect.bottom);
-        width = Math.max(0, appRect.width);
+        width = Math.max(0, col2 - col1);
         height = Math.max(0, vh - appRect.bottom);
       } else if (zone === "br") {
-        left = Math.max(0, appRect.right);
+        left = Math.max(0, col2);
         top = Math.max(0, appRect.bottom);
-        width = Math.max(0, vw - appRect.right);
+        width = Math.max(0, vw - col2);
         height = Math.max(0, vh - appRect.bottom);
       }
 
