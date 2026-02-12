@@ -639,3 +639,15 @@ document.addEventListener("keyup", (event) => {
   // initial calc
   updateTouchAreas();
 })();
+
+async function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  if (!window.isSecureContext) return;
+  try {
+    await navigator.serviceWorker.register("sw.js");
+  } catch (err) {
+    console.warn("Service Worker register failed:", err);
+  }
+}
+
+registerServiceWorker();

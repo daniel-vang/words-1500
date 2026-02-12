@@ -1,0 +1,11 @@
+{
+  "name": "初中英语单词练习",
+  "short_name": "单词练习",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f1ea",
+  "theme_color": "#f4f1ea",
+  "lang": "zh-CN",
+  "description": "可离线使用的初中英语单词练习应用"
+}

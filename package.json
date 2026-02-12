@@ -22,6 +22,8 @@
       "index.html",
       "style.css",
       "app.js",
+      "sw.js",
+      "manifest.webmanifest",
       "words-*.js",
       "words-*.json",
       "*.txt",
