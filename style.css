@@ -315,7 +315,7 @@ button:disabled {
   background: rgba(64, 125, 209, 0.22);
 }
 
-#touch-overlay.help-on .touch-area[data-zone="tm"],
+#touch-overlay.help-on .touch-area[data-zone="lm"],
 #touch-overlay.help-on .touch-area[data-zone="rm"]{
   background: rgba(65, 169, 118, 0.22);
 }

@@ -495,12 +495,12 @@ document.addEventListener("keyup", (event) => {
       prevWord();
       return;
     }
-    if (zone === "tm" || zone === "rm") {
-      showMeaning();
+    if (zone === "tm") {
+      toggleStats();
       return;
     }
-    if (zone === "lm") {
-      toggleStats();
+    if (zone === "lm" || zone === "rm") {
+      showMeaning();
       return;
     }
     if (zone === "bm") {
