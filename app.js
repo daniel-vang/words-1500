@@ -23,6 +23,8 @@ let historyIndex = -1;
 let helpActive = false;
 let statsVisible = false;
 const learnedWords = new Set();
+const learnedOrder = [];
+const learnedIndex = new Map();
 const meaningWords = new Set();
 
 const defaultSources = ["words-1500.json", "words.json", "Worlds.json", "worlds.json"];
@@ -92,7 +94,13 @@ function updateStats() {
     return;
   }
   statsEl.classList.remove("hidden");
-  statsEl.textContent = `已学 ${learnedWords.size} 个 · 中文 ${meaningWords.size} 个`;
+  let currentIndex = 0;
+  if (current) {
+    const key = wordKey(current);
+    const idx = learnedIndex.get(key);
+    if (typeof idx === "number") currentIndex = idx + 1;
+  }
+  statsEl.textContent = `第 ${currentIndex}/${learnedWords.size} · 中文 ${meaningWords.size}`;
 }
 
 function markLearned(word) {
@@ -100,6 +108,8 @@ function markLearned(word) {
   if (!key) return;
   if (!learnedWords.has(key)) {
     learnedWords.add(key);
+    learnedIndex.set(key, learnedOrder.length);
+    learnedOrder.push(key);
     updateStats();
   }
 }
@@ -134,6 +144,7 @@ function renderWord(word) {
   nextBtn.disabled = false;
   showMeaningBtn.disabled = false;
   markLearned(current);
+  updateStats();
   speakWord(current);
   if (micEnabled && recognition && started) {
     startListening();
@@ -276,6 +287,8 @@ async function loadWords(file) {
   history = [];
   historyIndex = -1;
   learnedWords.clear();
+  learnedOrder.length = 0;
+  learnedIndex.clear();
   meaningWords.clear();
   updateStats();
   if (loadWordsFromInline(file)) return true;
