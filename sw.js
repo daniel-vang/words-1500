@@ -12,6 +12,7 @@ const APP_SHELL = [
   "words-3000.js",
   "words-3000.json",
   "manifest.webmanifest",
+  "sw.js",
 ];
 
 self.addEventListener("install", (event) => {
@@ -39,10 +40,13 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // Navigation: prefer network, fallback to cached shell.
+  // Navigation: cache-first for offline reliability.
   if (req.mode === "navigate") {
     event.respondWith(
-      fetch(req).catch(() => caches.match("index.html"))
+      caches
+        .match(req)
+        .then((cached) => cached || caches.match("index.html"))
+        .then((cached) => cached || fetch(req))
     );
     return;
   }
