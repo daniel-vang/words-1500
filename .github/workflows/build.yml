@@ -66,7 +66,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist-pages
-          cp index.html style.css app.js words-1500.js words-3000.js words-1500.json words-3000.json dist-pages/
+          cp index.html style.css app.js sw.js words-*.js* manifest.webmanifest dist-pages/
           touch dist-pages/.nojekyll
 
       - name: Setup Pages

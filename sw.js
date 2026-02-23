@@ -11,6 +11,8 @@ const APP_SHELL = [
   "words-1500.json",
   "words-3000.js",
   "words-3000.json",
+  "words-3500.js",
+  "words-3500.json",
   "manifest.webmanifest",
   "sw.js",
 ];
