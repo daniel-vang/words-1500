@@ -9,7 +9,13 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="stats hidden" id="stats">已学 0 个 · 中文 0 个</div>
+  <div class="stats hidden" id="stats" role="status" aria-live="polite">
+    <div class="stats-line stats-current">
+      <span id="stats-current">第 0/0 · 中文 0</span>
+      <button id="statsToggle" class="stats-toggle" type="button" aria-expanded="false" aria-label="展开总统计"></button>
+    </div>
+    <div class="stats-line stats-total" id="stats-total">总计 0 · 中文 0</div>
+  </div>
   <div class="app">
     <main class="card">
       <div class="word" id="word">点击开始</div>

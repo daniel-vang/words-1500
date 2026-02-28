@@ -9,6 +9,9 @@ const micBtn = document.getElementById("micBtn");
 const helpBtn = document.getElementById("helpBtn");
 const overlayEl = document.getElementById("touch-overlay");
 const statsEl = document.getElementById("stats");
+const statsCurrentEl = document.getElementById("stats-current");
+const statsTotalEl = document.getElementById("stats-total");
+const statsToggleBtn = document.getElementById("statsToggle");
 const toggleBtns = Array.from(document.querySelectorAll(".toggle-btn"));
 
 let words = [];
@@ -22,10 +25,22 @@ let history = [];
 let historyIndex = -1;
 let helpActive = false;
 let statsVisible = false;
+let statsExpanded = false;
 const learnedWords = new Set();
 const learnedOrder = [];
 const learnedIndex = new Map();
 const meaningWords = new Set();
+const longTermLearned = new Set();
+const longTermMeaning = new Set();
+const LONG_TERM_KEY = "words-longterm-v1";
+const IDLE_LIMIT_MS = 6 * 1000;
+const TIME_SAVE_EVERY_MS = 10 * 1000;
+let sessionTimeMs = 0;
+let longTermTimeMs = 0;
+let lastTickAt = Date.now();
+let lastActiveAt = Date.now();
+let lastTimeSaveAt = 0;
+let windowFocused = true;
 
 const defaultSources = ["words-1500.json", "words.json", "Worlds.json", "worlds.json"];
 
@@ -87,8 +102,65 @@ function wordKey(word) {
   return `${word.en}||${word.cn || ""}`;
 }
 
+function loadLongTermStats() {
+  if (!window.localStorage) return;
+  try {
+    const raw = localStorage.getItem(LONG_TERM_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data && Array.isArray(data.learned)) {
+      data.learned.forEach((key) => {
+        if (typeof key === "string" && key) longTermLearned.add(key);
+      });
+    }
+    if (data && Array.isArray(data.meaning)) {
+      data.meaning.forEach((key) => {
+        if (typeof key === "string" && key) longTermMeaning.add(key);
+      });
+    }
+    if (data && typeof data.timeMs === "number" && Number.isFinite(data.timeMs)) {
+      longTermTimeMs = Math.max(0, data.timeMs);
+    }
+  } catch (err) {
+    // ignore invalid storage data
+  }
+}
+
+function saveLongTermStats() {
+  if (!window.localStorage) return;
+  try {
+    const payload = {
+      learned: Array.from(longTermLearned),
+      meaning: Array.from(longTermMeaning),
+      timeMs: longTermTimeMs,
+    };
+    localStorage.setItem(LONG_TERM_KEY, JSON.stringify(payload));
+  } catch (err) {
+    // ignore storage failures
+  }
+}
+
+function formatDuration(ms) {
+  const totalSeconds = Math.floor(ms / 1000);
+  const seconds = totalSeconds % 60;
+  const minutes = Math.floor(totalSeconds / 60) % 60;
+  const hours = Math.floor(totalSeconds / 3600);
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function updateStatsToggleLabel() {
+  if (!statsToggleBtn) return;
+  statsToggleBtn.setAttribute("aria-expanded", statsExpanded ? "true" : "false");
+  statsToggleBtn.setAttribute("aria-label", statsExpanded ? "收起总统计" : "展开总统计");
+}
+
 function updateStats() {
   if (!statsEl) return;
+  statsEl.classList.toggle("expanded", statsExpanded);
+  updateStatsToggleLabel();
   if (!statsVisible) {
     statsEl.classList.add("hidden");
     return;
@@ -100,7 +172,12 @@ function updateStats() {
     const idx = learnedIndex.get(key);
     if (typeof idx === "number") currentIndex = idx + 1;
   }
-  statsEl.textContent = `第 ${currentIndex}/${learnedWords.size} · 中文 ${meaningWords.size}`;
+  if (statsCurrentEl) {
+    statsCurrentEl.textContent = `第 ${currentIndex}/${learnedWords.size} · 中文 ${meaningWords.size}`;
+  }
+  if (statsTotalEl) {
+    statsTotalEl.textContent = `总计 ${longTermLearned.size} · 中文 ${longTermMeaning.size} · 用时 ${formatDuration(longTermTimeMs)} · 本次 ${formatDuration(sessionTimeMs)}`;
+  }
 }
 
 function markLearned(word) {
@@ -110,6 +187,10 @@ function markLearned(word) {
     learnedWords.add(key);
     learnedIndex.set(key, learnedOrder.length);
     learnedOrder.push(key);
+    if (!longTermLearned.has(key)) {
+      longTermLearned.add(key);
+      saveLongTermStats();
+    }
     updateStats();
   }
 }
@@ -119,12 +200,47 @@ function markMeaning(word) {
   if (!key) return;
   if (!meaningWords.has(key)) {
     meaningWords.add(key);
+    if (!longTermMeaning.has(key)) {
+      longTermMeaning.add(key);
+      saveLongTermStats();
+    }
     updateStats();
   }
 }
 
 function toggleStats() {
   statsVisible = !statsVisible;
+  updateStats();
+}
+
+function toggleStatsExpanded() {
+  statsExpanded = !statsExpanded;
+  updateStats();
+}
+
+function markActive() {
+  lastActiveAt = Date.now();
+}
+
+function shouldCountTime(now) {
+  if (document.hidden) return false;
+  if (!windowFocused) return false;
+  if (now - lastActiveAt > IDLE_LIMIT_MS) return false;
+  return true;
+}
+
+function tickTime() {
+  const now = Date.now();
+  const delta = now - lastTickAt;
+  lastTickAt = now;
+  if (delta <= 0) return;
+  if (!shouldCountTime(now)) return;
+  sessionTimeMs += delta;
+  longTermTimeMs += delta;
+  if (now - lastTimeSaveAt >= TIME_SAVE_EVERY_MS) {
+    lastTimeSaveAt = now;
+    saveLongTermStats();
+  }
   updateStats();
 }
 
@@ -200,6 +316,7 @@ function setupRecognition() {
   rec.maxAlternatives = 3;
 
   rec.onresult = (event) => {
+    markActive();
     const transcript = Array.from(event.results)
       .map((r) => r[0].transcript)
       .join(" ");
@@ -290,6 +407,9 @@ async function loadWords(file) {
   learnedOrder.length = 0;
   learnedIndex.clear();
   meaningWords.clear();
+  sessionTimeMs = 0;
+  lastTickAt = Date.now();
+  lastActiveAt = Date.now();
   updateStats();
   if (loadWordsFromInline(file)) return true;
   const sources = getSources(file);
@@ -380,6 +500,14 @@ if (helpBtn) {
   });
 }
 
+if (statsToggleBtn) {
+  statsToggleBtn.addEventListener("click", (event) => {
+    markActive();
+    event.stopPropagation();
+    toggleStatsExpanded();
+  });
+}
+
 toggleBtns.forEach((btn) => {
   btn.addEventListener("click", async () => {
     const file = btn.dataset.file;
@@ -394,12 +522,34 @@ toggleBtns.forEach((btn) => {
   });
 });
 
+loadLongTermStats();
+document.addEventListener("pointerdown", markActive, { passive: true });
+document.addEventListener("touchstart", markActive, { passive: true });
+window.addEventListener("focus", () => {
+  windowFocused = true;
+  lastTickAt = Date.now();
+  markActive();
+});
+window.addEventListener("blur", () => {
+  windowFocused = false;
+});
+document.addEventListener("visibilitychange", () => {
+  lastTickAt = Date.now();
+  if (!document.hidden) {
+    markActive();
+  }
+});
+window.addEventListener("beforeunload", () => {
+  saveLongTermStats();
+});
+setInterval(tickTime, 1000);
 updateMicUI();
 autoStart();
 
 const pressedKeys = new Set();
 
 document.addEventListener("keydown", async (event) => {
+  markActive();
   const target = event.target;
   if (target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) {
     return;
