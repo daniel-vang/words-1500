@@ -791,6 +791,54 @@ document.addEventListener("keyup", (event) => {
   updateTouchAreas();
 })();
 
+// --- Auto button: automatically click "next" every 3 seconds when enabled ---
+const autoBtn = document.getElementById("autoBtn");
+let autoIntervalId = null;
+let autoEnabled = false;
+
+function updateAutoUI() {
+  if (!autoBtn) return;
+  autoBtn.classList.toggle("active", autoEnabled);
+  autoBtn.setAttribute("aria-pressed", autoEnabled ? "true" : "false");
+}
+
+function startAuto() {
+  if (autoIntervalId) return;
+  autoIntervalId = setInterval(() => {
+    markActive();
+    if (nextBtn) nextBtn.click();
+  }, 3500);
+}
+
+function stopAuto() {
+  if (!autoIntervalId) return;
+  clearInterval(autoIntervalId);
+  autoIntervalId = null;
+}
+
+if (autoBtn) {
+  autoBtn.addEventListener("click", async () => {
+    autoEnabled = !autoEnabled;
+    if (autoEnabled) {
+      if (!started) {
+        const ok = await loadWords(currentFile);
+        if (!ok) {
+          autoEnabled = false;
+          updateAutoUI();
+          return;
+        }
+        started = true;
+      }
+      startAuto();
+    } else {
+      stopAuto();
+    }
+    updateAutoUI();
+  });
+}
+
+updateAutoUI();
+
 async function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   if (!window.isSecureContext) return;
