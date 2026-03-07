@@ -33,6 +33,9 @@ const meaningWords = new Set();
 const longTermLearned = new Set();
 const longTermMeaning = new Set();
 const LONG_TERM_KEY = "words-longterm-v1";
+const VOCAB_KEY = "words-vocab-v1";
+let vocabList = [];
+const vocabSet = new Set();
 const IDLE_LIMIT_MS = 6 * 1000;
 const TIME_SAVE_EVERY_MS = 10 * 1000;
 let sessionTimeMs = 0;
@@ -137,6 +140,82 @@ function saveLongTermStats() {
     localStorage.setItem(LONG_TERM_KEY, JSON.stringify(payload));
   } catch (err) {
     // ignore storage failures
+  }
+}
+
+function loadVocab() {
+  if (!window.localStorage) return;
+  try {
+    const raw = localStorage.getItem(VOCAB_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (Array.isArray(data)) {
+      vocabList = data;
+      vocabList.forEach((w) => vocabSet.add(wordKey(w)));
+    }
+  } catch (err) {
+    // ignore invalid storage data
+  }
+}
+
+function saveVocab() {
+  if (!window.localStorage) return;
+  try {
+    localStorage.setItem(VOCAB_KEY, JSON.stringify(vocabList));
+  } catch (err) {
+    // ignore storage failures
+  }
+}
+
+function addToVocab(word, sourceFile) {
+  if (!word || !word.en) return;
+  const key = wordKey(word);
+  if (vocabSet.has(key)) return;
+  const entry = { en: word.en, cn: word.cn || "", source: sourceFile };
+  if (word.phonetic) entry.phonetic = word.phonetic;
+  if (word.pos) entry.pos = word.pos;
+  vocabList.push(entry);
+  vocabSet.add(key);
+  saveVocab();
+}
+
+function removeFromVocab(word) {
+  if (!word) return;
+  const key = wordKey(word);
+  if (!vocabSet.has(key)) return;
+  vocabList = vocabList.filter((w) => wordKey(w) !== key);
+  vocabSet.delete(key);
+  saveVocab();
+}
+
+function isInVocab(word) {
+  if (!word) return false;
+  return vocabSet.has(wordKey(word));
+}
+
+function getSourceName(file) {
+  if (!file) return "";
+  const opt = wordListSelect && wordListSelect.querySelector(`option[value="${CSS.escape(file)}"]`);
+  if (opt) return opt.textContent;
+  if (file.startsWith("custom:")) return file.slice(7);
+  return file;
+}
+
+function updateFavBtn() {
+  const btn = document.getElementById("favBtn");
+  const sourceEl = document.getElementById("favSource");
+  if (!btn) return;
+  const inVocab = current ? isInVocab(current) : false;
+  btn.textContent = inVocab ? "★" : "☆";
+  btn.classList.toggle("active", inVocab);
+  btn.disabled = !current;
+  btn.setAttribute("aria-label", inVocab ? "从生词本移除" : "加入生词本");
+  if (sourceEl) {
+    if (currentFile === "_vocab_" && current && current.source) {
+      sourceEl.textContent = getSourceName(current.source);
+    } else {
+      sourceEl.textContent = "";
+    }
   }
 }
 
@@ -248,6 +327,10 @@ function showMeaning() {
   if (!current) return;
   meaningEl.textContent = `${current.cn}`;
   markMeaning(current);
+  if (currentFile !== "_vocab_") {
+    addToVocab(current, currentFile);
+  }
+  updateFavBtn();
 }
 
 function renderWord(word) {
@@ -262,6 +345,7 @@ function renderWord(word) {
   markLearned(current);
   updateStats();
   speakWord(current);
+  updateFavBtn();
   if (micEnabled && recognition && started) {
     startListening();
   }
@@ -390,6 +474,7 @@ function getSources(file) {
 }
 
 async function loadWords(file) {
+  if (file === "_vocab_") return false;
   words = [];
   history = [];
   historyIndex = -1;
@@ -461,6 +546,23 @@ showMeaningBtn.addEventListener("click", () => {
   showMeaning();
 });
 
+const favBtn = document.getElementById("favBtn");
+if (favBtn) {
+  favBtn.addEventListener("click", () => {
+    if (!current) return;
+    if (isInVocab(current)) {
+      removeFromVocab(current);
+      if (currentFile === "_vocab_") {
+        const key = wordKey(current);
+        words = words.filter((w) => wordKey(w) !== key);
+      }
+    } else {
+      addToVocab(current, currentFile);
+    }
+    updateFavBtn();
+  });
+}
+
 if (micBtn) {
   micBtn.addEventListener("click", async () => {
     micEnabled = !micEnabled;
@@ -521,7 +623,33 @@ if (wordListSelect) {
     if (!file) return;
     currentFile = file;
     stopListening();
-    if (file.startsWith("custom:")) {
+    if (file === "_vocab_") {
+      words = [...vocabList];
+      history = [];
+      historyIndex = -1;
+      learnedWords.clear();
+      learnedOrder.length = 0;
+      learnedIndex.clear();
+      meaningWords.clear();
+      sessionTimeMs = 0;
+      lastTickAt = Date.now();
+      lastActiveAt = Date.now();
+      updateStats();
+      if (!started) started = true;
+      if (words.length) {
+        nextWord();
+      } else {
+        current = null;
+        updateFavBtn();
+        wordEl.textContent = "";
+        phoneticEl.textContent = "";
+        meaningEl.textContent = "";
+        setStatus("生词本为空，请先收藏单词", "bad");
+        nextBtn.disabled = true;
+        repeatBtn.disabled = true;
+        showMeaningBtn.disabled = true;
+      }
+    } else if (file.startsWith("custom:")) {
       const listName = file.slice(7);
       const customLists = loadCustomLists();
       const wordList = customLists[listName] ? customLists[listName].words : [];
@@ -552,6 +680,7 @@ if (wordListSelect) {
 }
 
 loadLongTermStats();
+loadVocab();
 document.addEventListener("pointerdown", markActive, { passive: true });
 document.addEventListener("touchstart", markActive, { passive: true });
 window.addEventListener("focus", () => {

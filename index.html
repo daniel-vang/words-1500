@@ -17,6 +17,10 @@
     <div class="stats-line stats-total" id="stats-total">总计 0 · 中文 0</div>
   </div>
   <div class="app">
+    <div class="fav-area">
+      <span class="fav-source" id="favSource"></span>
+      <button class="fav-btn" id="favBtn" type="button" aria-label="加入生词本" disabled>☆</button>
+    </div>
     <main class="card">
       <div class="word" id="word">点击开始</div>
       <div class="phonetic" id="phonetic"></div>
@@ -39,6 +43,7 @@
               <option value="words-1500.json">初中1500</option>
               <option value="words-3000.json">初中3000</option>
               <option value="words-3500.json">高中3500</option>
+              <option value="_vocab_">生词本</option>
             </optgroup>
           </select>
           <button type="button" id="wordListBtn" class="word-list-select word-list-btn" aria-haspopup="listbox" aria-expanded="false"></button>
