@@ -93,11 +93,17 @@ function setStatus(text, type) {
 
 function speakWord(word) {
   if (!window.speechSynthesis) return;
+  // Workaround for Chrome/Safari bug: speechSynthesis silently freezes after
+  // ~15 s of inactivity or after many utterances. Detect by checking paused
+  // state and cancel+resume to unfreeze the engine before speaking.
+  if (speechSynthesis.paused) speechSynthesis.resume();
+  speechSynthesis.cancel();
+  // Small delay lets cancel() flush before the new utterance is queued,
+  // which avoids the "stuck queue" freeze on Chromium-based browsers.
   const utter = new SpeechSynthesisUtterance(word.en.replace(/^\*+/, ""));
   utter.lang = "en-US";
   utter.rate = 0.95;
-  speechSynthesis.cancel();
-  speechSynthesis.speak(utter);
+  setTimeout(() => speechSynthesis.speak(utter), 50);
 }
 
 function wordKey(word) {
@@ -712,6 +718,8 @@ document.addEventListener("keydown", async (event) => {
   if (target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) {
     return;
   }
+  // Don't process practice shortcuts while browse modal is open
+  { const _bm = document.getElementById("browseModal"); if (_bm && !_bm.classList.contains("hidden")) return; }
   if (target && target.tagName === "BUTTON" && (event.key === " " || event.key === "Enter")) {
     event.preventDefault();
     event.stopPropagation();
@@ -972,6 +980,14 @@ function stopAuto() {
   if (!autoIntervalId) return;
   clearInterval(autoIntervalId);
   autoIntervalId = null;
+}
+
+// Stop main-page auto and update its button; called whenever a modal opens.
+function pauseMainAuto() {
+  if (!autoEnabled) return;
+  autoEnabled = false;
+  stopAuto();
+  updateAutoUI();
 }
 
 if (autoBtn) {
@@ -1376,6 +1392,7 @@ let activeImportTab = "text";
 let editingListName = null; // null = new list, string = editing existing list
 
 function openImportModal(editName) {
+  pauseMainAuto();
   if (!importModal) return;
   editingListName = editName || null;
   importModal.classList.remove("hidden");
@@ -1773,6 +1790,11 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && importModal && !importModal.classList.contains("hidden")) {
     closeImportModal(); // confirmation handled inside
   }
+  const _bmEsc = document.getElementById("browseModal");
+  if (e.key === "Escape" && _bmEsc && !_bmEsc.classList.contains("hidden")) {
+    closeBrowseModal();
+    return;
+  }
   if (e.key === "Escape") {
     closeWordListPopup();
   }
@@ -1780,6 +1802,464 @@ document.addEventListener("keydown", (e) => {
 
 // Init: render any previously saved custom list buttons
 refreshCustomToggleBtns();
+
+// ============================================================
+// BROWSE MODE
+// ============================================================
+
+const BROWSE_PAGE_KEY = "browse-pages-v1";
+const BROWSE_PREFS_KEY = "browse-prefs-v1";
+const BROWSE_PAGE_SIZE = 64;
+let browseCnVisible = true;
+let browseListMode = false;
+let browseShuffled = false;
+let browseCurrentPage = 1;
+let browseWordList = [];
+let browseAutoEnabled = false;
+let browseAutoIdx = 0;       // index into browseWordList
+let browseAutoTimerId = null;
+const BROWSE_AUTO_DELAY = 3500; // shared cadence with main auto button
+
+function getBrowsePageSize() {
+  return BROWSE_PAGE_SIZE;
+}
+
+// ---- Deterministic per-word shuffle ----
+// Seed: listKey (e.g. "words-1500.json") + word.en
+// Algorithm: djb2 hash of the concatenated string.
+// Each word gets a stable numeric key; sorting by that key produces
+// a fixed permutation that is:
+//   - identical across all devices (pure string hash, no PRNG state)
+//   - stable under list edits: adding/removing one word only moves
+//     that word; all other words keep their relative positions
+//   - determined entirely by the list filename and the English word text
+function djb2(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(h, 33) ^ str.charCodeAt(i);
+  }
+  return h >>> 0; // unsigned 32-bit
+}
+
+function buildBrowseWordList() {
+  const base = currentFile === "_vocab_" ? [...vocabList] : [...words];
+  if (!browseShuffled) return base;
+  const key = currentFile;
+  return base.slice().sort((a, b) =>
+    djb2(key + "\x00" + (a.en || "")) - djb2(key + "\x00" + (b.en || ""))
+  );
+}
+
+function saveBrowsePage(file, page) {
+  try {
+    const raw = localStorage.getItem(BROWSE_PAGE_KEY);
+    const pages = raw ? JSON.parse(raw) : {};
+    pages[file] = page;
+    localStorage.setItem(BROWSE_PAGE_KEY, JSON.stringify(pages));
+  } catch { /* ignore */ }
+}
+
+function getSavedBrowsePage(file) {
+  try {
+    const raw = localStorage.getItem(BROWSE_PAGE_KEY);
+    const pages = raw ? JSON.parse(raw) : {};
+    return pages[file] || 1;
+  } catch { return 1; }
+}
+
+function saveBrowsePrefs() {
+  try {
+    const raw = localStorage.getItem(BROWSE_PREFS_KEY);
+    const all = raw ? JSON.parse(raw) : {};
+    all[currentFile] = { shuffled: browseShuffled, listMode: browseListMode };
+    localStorage.setItem(BROWSE_PREFS_KEY, JSON.stringify(all));
+  } catch { /* ignore */ }
+}
+
+function loadBrowsePrefs() {
+  try {
+    const raw = localStorage.getItem(BROWSE_PREFS_KEY);
+    const all = raw ? JSON.parse(raw) : {};
+    if (!Object.prototype.hasOwnProperty.call(all, currentFile)) {
+      // First open for this word list: default to shuffle + list mode
+      browseShuffled = true;
+      browseListMode = true;
+    } else {
+      const p = all[currentFile];
+      browseShuffled = !!p.shuffled;
+      browseListMode = !!p.listMode;
+    }
+  } catch {
+    browseShuffled = true;
+    browseListMode = true;
+  }
+}
+
+function openBrowseModal() {
+  pauseMainAuto();
+  const modal = document.getElementById("browseModal");
+  if (!modal) return;
+
+  // Restore persisted prefs (shuffle / layout)
+  loadBrowsePrefs();
+
+  // Build word list (respecting shuffle state)
+  browseWordList = buildBrowseWordList();
+
+  if (!browseWordList.length) {
+    setStatus("词库为空，无法浏览", "bad");
+    return;
+  }
+
+  // Update title
+  const titleEl = document.getElementById("browseTitleEl");
+  if (titleEl) {
+    const name = getSourceName(currentFile) || currentFile;
+    titleEl.textContent = `${name} · 共 ${browseWordList.length} 词`;
+  }
+
+  // Restore saved page
+  const totalPages = Math.ceil(browseWordList.length / getBrowsePageSize());
+  browseCurrentPage = Math.min(Math.max(getSavedBrowsePage(currentFile), 1), totalPages);
+  // Reset auto state on open
+  stopBrowseAuto();
+  browseAutoEnabled = false;
+  browseAutoIdx = (browseCurrentPage - 1) * getBrowsePageSize();
+
+  renderBrowsePage();
+  updateBrowseCnToggleBtn();
+  updateBrowseLayoutToggleBtn();
+  updateBrowseOrderToggleBtn();
+  updateBrowseAutoBtn();
+  modal.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+}
+
+function stopBrowseAuto() {
+  if (browseAutoTimerId !== null) {
+    clearInterval(browseAutoTimerId);
+    browseAutoTimerId = null;
+  }
+}
+
+function updateBrowseAutoBtn() {
+  const btn = document.getElementById("browseAutoBtn");
+  if (!btn) return;
+  btn.classList.toggle("active", browseAutoEnabled);
+  btn.setAttribute("aria-pressed", browseAutoEnabled ? "true" : "false");
+}
+
+function browseAutoStep() {
+  if (!browseAutoEnabled || !browseWordList.length) return;
+  const pageSize = getBrowsePageSize();
+  const total = browseWordList.length;
+  browseAutoIdx = (browseAutoIdx + 1) % total;
+  const targetPage = Math.floor(browseAutoIdx / pageSize) + 1;
+  if (targetPage !== browseCurrentPage) {
+    browseCurrentPage = targetPage;
+    renderBrowsePage();
+    // Speak after page renders
+    speakWord(browseWordList[browseAutoIdx]);
+  } else {
+    // Same page — just move the highlight and speak
+    const bodyEl = document.getElementById("browseBody");
+    if (bodyEl) {
+      bodyEl.querySelectorAll(".browse-word-item.browse-active")
+        .forEach((el) => el.classList.remove("browse-active"));
+      const posInPage = browseAutoIdx % pageSize;
+      const items = bodyEl.querySelectorAll(".browse-word-item");
+      if (items[posInPage]) items[posInPage].classList.add("browse-active");
+    }
+    speakWord(browseWordList[browseAutoIdx]);
+  }
+}
+
+function startBrowseAuto() {
+  if (browseAutoTimerId !== null) return;
+  // Speak current word immediately
+  if (browseWordList.length) speakWord(browseWordList[browseAutoIdx]);
+  browseAutoTimerId = setInterval(browseAutoStep, BROWSE_AUTO_DELAY);
+}
+
+function closeBrowseModal() {
+  stopBrowseAuto();
+  browseAutoEnabled = false;
+  updateBrowseAutoBtn();
+  const modal = document.getElementById("browseModal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+  document.body.style.overflow = "";
+}
+
+function renderBrowsePage() {
+  const bodyEl = document.getElementById("browseBody");
+  const pageInfoEl = document.getElementById("browsePageInfo");
+  const prevBtn = document.getElementById("browsePrevBtn");
+  const nextBtn = document.getElementById("browseNextBtn");
+  if (!bodyEl) return;
+
+  const pageSize = getBrowsePageSize();
+  const totalPages = Math.ceil(browseWordList.length / pageSize);
+  const startIdx = (browseCurrentPage - 1) * pageSize;
+  const pageWords = browseWordList.slice(startIdx, startIdx + pageSize);
+
+  bodyEl.innerHTML = "";
+  bodyEl.classList.toggle("cn-hidden", !browseCnVisible);
+  bodyEl.classList.toggle("list-mode", browseListMode);
+
+  pageWords.forEach((word, i) => {
+    const item = document.createElement("div");
+    item.className = "browse-word-item";
+    item.style.cursor = "pointer";
+    item.addEventListener("click", () => {
+      // In auto mode: restart from clicked word
+      if (browseAutoEnabled) {
+        browseAutoIdx = startIdx + i;
+        stopBrowseAuto();
+        browseAutoTimerId = null;
+        // Re-highlight
+        const bodyEl2 = document.getElementById("browseBody");
+        if (bodyEl2) {
+          bodyEl2.querySelectorAll(".browse-word-item.browse-active")
+            .forEach((el) => el.classList.remove("browse-active"));
+          item.classList.add("browse-active");
+        }
+        startBrowseAuto(); // startBrowseAuto already calls speakWord internally
+      } else {
+        speakWord(word);
+      }
+    });
+
+    const enLine = document.createElement("div");
+    enLine.className = "browse-en-line";
+
+    const numSpan = document.createElement("span");
+    numSpan.className = "browse-word-num";
+    numSpan.textContent = (startIdx + i + 1) + ".";
+
+    const enSpan = document.createElement("span");
+    enSpan.className = "browse-word-en";
+    enSpan.textContent = word.en || "";
+
+    enLine.appendChild(numSpan);
+    enLine.appendChild(enSpan);
+
+    const cnDiv = document.createElement("div");
+    cnDiv.className = "browse-word-cn";
+    cnDiv.textContent = word.cn || "—";
+
+    item.appendChild(enLine);
+    item.appendChild(cnDiv);
+    bodyEl.appendChild(item);
+  });
+
+  if (pageInfoEl) {
+    const end = Math.min(startIdx + pageSize, browseWordList.length);
+    pageInfoEl.textContent = `第 ${startIdx + 1}–${end} 词 · 第 ${browseCurrentPage}/${totalPages} 页`;
+  }
+  if (prevBtn) prevBtn.disabled = browseCurrentPage <= 1;
+  if (nextBtn) nextBtn.disabled = browseCurrentPage >= totalPages;
+  const sliderEl = document.getElementById("browsePageSlider");
+  if (sliderEl) {
+    sliderEl.min = 1;
+    sliderEl.max = totalPages;
+    sliderEl.value = browseCurrentPage;
+    const centerEl = sliderEl.parentElement;
+    if (centerEl) centerEl.style.visibility = totalPages > 1 ? "" : "hidden";
+  }
+  // Highlight active word in auto mode
+  if (browseAutoEnabled) {
+    const posInPage = browseAutoIdx % pageSize;
+    const items = bodyEl.querySelectorAll(".browse-word-item");
+    if (items[posInPage]) items[posInPage].classList.add("browse-active");
+  }
+
+  bodyEl.scrollTop = 0;
+  saveBrowsePage(currentFile, browseCurrentPage);
+  // Apply after DOM settles so clientHeight is accurate
+  requestAnimationFrame(applyBrowseFitLayout);
+}
+
+// Apply fixed 8×8 grid or 32×2 list layout
+function applyBrowseFitLayout() {
+  const bodyEl = document.getElementById("browseBody");
+  if (!bodyEl) return;
+  const bm = document.getElementById("browseModal");
+  if (!bm || bm.classList.contains("hidden")) return;
+
+  const cols = browseListMode ? 2 : 8;
+  const rows = browseListMode ? 32 : 8;
+
+  bodyEl.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  bodyEl.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+  // column flow: items fill top-to-bottom in each column (left col first, then right)
+  bodyEl.style.gridAutoFlow = browseListMode ? "column" : "row";
+
+  if (browseListMode) {
+    // Derive font size from actual row height so text always fits
+    const padV = 8; // top+bottom padding of browse-body
+    const gapPx = 1;
+    const rowH = (bodyEl.clientHeight - padV - (rows - 1) * gapPx) / rows;
+    // Font occupies ~70% of row height; clamp 8–14px
+    const fs = Math.min(14, Math.max(8, Math.floor(rowH * 0.70)));
+    const fsCn = Math.max(7, fs - 1);
+    bodyEl.style.setProperty("--browse-list-fs", fs + "px");
+    bodyEl.style.setProperty("--browse-list-fs-cn", fsCn + "px");
+  }
+}
+
+function updateBrowseCnToggleBtn() {
+  const btn = document.getElementById("browseCnToggle");
+  if (!btn) return;
+  btn.classList.toggle("active", browseCnVisible);
+  btn.setAttribute("aria-pressed", browseCnVisible ? "true" : "false");
+}
+
+function updateBrowseLayoutToggleBtn() {
+  document.querySelectorAll(".browse-toggle-btn[data-layout]").forEach((btn) => {
+    btn.classList.toggle("active", (btn.dataset.layout === "list") === browseListMode);
+  });
+}
+
+function updateBrowseOrderToggleBtn() {
+  document.querySelectorAll(".browse-toggle-btn[data-order]").forEach((btn) => {
+    btn.classList.toggle("active", (btn.dataset.order === "shuffle") === browseShuffled);
+  });
+}
+
+(function initBrowseMode() {
+  const browseBtn = document.getElementById("browseBtn");
+  if (browseBtn) browseBtn.addEventListener("click", openBrowseModal);
+
+  const browseCloseBtn = document.getElementById("browseCloseBtn");
+  if (browseCloseBtn) browseCloseBtn.addEventListener("click", closeBrowseModal);
+
+  const browseCnToggle = document.getElementById("browseCnToggle");
+  if (browseCnToggle) {
+    browseCnToggle.addEventListener("click", () => {
+      browseCnVisible = !browseCnVisible;
+      updateBrowseCnToggleBtn();
+      const bodyEl = document.getElementById("browseBody");
+      if (bodyEl) bodyEl.classList.toggle("cn-hidden", !browseCnVisible);
+    });
+  }
+
+  const browseAutoToggle = document.getElementById("browseAutoBtn");
+  if (browseAutoToggle) {
+    browseAutoToggle.addEventListener("click", () => {
+      browseAutoEnabled = !browseAutoEnabled;
+      if (browseAutoEnabled) {
+        // Ensure idx is on current page
+        const pageSize = getBrowsePageSize();
+        const pageStart = (browseCurrentPage - 1) * pageSize;
+        const pageEnd = pageStart + pageSize - 1;
+        if (browseAutoIdx < pageStart || browseAutoIdx > pageEnd) {
+          browseAutoIdx = pageStart;
+        }
+        // Re-render to show highlight then start
+        renderBrowsePage();
+        startBrowseAuto();
+      } else {
+        stopBrowseAuto();
+        // Remove highlights without full re-render
+        const bodyEl = document.getElementById("browseBody");
+        if (bodyEl) bodyEl.querySelectorAll(".browse-word-item.browse-active")
+          .forEach((el) => el.classList.remove("browse-active"));
+      }
+      updateBrowseAutoBtn();
+    });
+  }
+
+  // Order toggle (顺序 / 乱序)
+  document.querySelectorAll(".browse-toggle-btn[data-order]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const wantShuffle = btn.dataset.order === "shuffle";
+      if (wantShuffle === browseShuffled) return;
+      browseShuffled = wantShuffle;
+      saveBrowsePrefs();
+      browseWordList = buildBrowseWordList();
+      browseCurrentPage = 1;
+      renderBrowsePage();
+      updateBrowseOrderToggleBtn();
+    });
+  });
+
+  document.querySelectorAll(".browse-toggle-btn[data-layout]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const layout = btn.dataset.layout;
+      if ((layout === "list") === browseListMode) return;
+      browseListMode = layout === "list";
+      saveBrowsePrefs();
+      const totalPages = Math.ceil(browseWordList.length / getBrowsePageSize());
+      browseCurrentPage = Math.min(browseCurrentPage, totalPages);
+      renderBrowsePage();
+      updateBrowseLayoutToggleBtn();
+    });
+  });
+
+  const browseSlider = document.getElementById("browsePageSlider");
+  if (browseSlider) {
+    browseSlider.addEventListener("input", () => {
+      const tp = Math.ceil(browseWordList.length / getBrowsePageSize());
+      const p = Math.min(Math.max(1, parseInt(browseSlider.value, 10)), tp);
+      if (p !== browseCurrentPage) {
+        if (browseAutoEnabled) { stopBrowseAuto(); browseAutoEnabled = false; updateBrowseAutoBtn(); }
+        browseCurrentPage = p;
+        renderBrowsePage();
+      }
+    });
+  }
+
+  const browsePrevBtn = document.getElementById("browsePrevBtn");
+  if (browsePrevBtn) {
+    browsePrevBtn.addEventListener("click", () => {
+      if (browseCurrentPage <= 1) return;
+      if (browseAutoEnabled) { stopBrowseAuto(); browseAutoEnabled = false; updateBrowseAutoBtn(); }
+      browseCurrentPage--;
+      renderBrowsePage();
+    });
+  }
+
+  const browseNextBtn = document.getElementById("browseNextBtn");
+  if (browseNextBtn) {
+    browseNextBtn.addEventListener("click", () => {
+      const tp = Math.ceil(browseWordList.length / getBrowsePageSize());
+      if (browseCurrentPage >= tp) return;
+      if (browseAutoEnabled) { stopBrowseAuto(); browseAutoEnabled = false; updateBrowseAutoBtn(); }
+      browseCurrentPage++;
+      renderBrowsePage();
+    });
+  }
+
+  const browseModalEl = document.getElementById("browseModal");
+  if (browseModalEl) {
+    browseModalEl.addEventListener("click", (e) => {
+      if (e.target === browseModalEl) closeBrowseModal();
+    });
+  }
+
+  window.addEventListener("resize", applyBrowseFitLayout);
+
+  // Arrow / Page keys for page navigation when browse modal is open
+  document.addEventListener("keydown", (e) => {
+    const bm = document.getElementById("browseModal");
+    if (!bm || bm.classList.contains("hidden")) return;
+    if (e.key === "ArrowLeft" || e.key === "PageUp") {
+      e.preventDefault();
+      if (browseCurrentPage > 1) {
+        if (browseAutoEnabled) { stopBrowseAuto(); browseAutoEnabled = false; updateBrowseAutoBtn(); }
+        browseCurrentPage--; renderBrowsePage();
+      }
+    } else if (e.key === "ArrowRight" || e.key === "PageDown") {
+      e.preventDefault();
+      const tp = Math.ceil(browseWordList.length / getBrowsePageSize());
+      if (browseCurrentPage < tp) {
+        if (browseAutoEnabled) { stopBrowseAuto(); browseAutoEnabled = false; updateBrowseAutoBtn(); }
+        browseCurrentPage++; renderBrowsePage();
+      }
+    }
+  });
+})();
 
 // ---------- Custom Word List Dropdown ----------
 function buildWordListPopup() {

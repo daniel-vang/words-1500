@@ -17,6 +17,9 @@
     <div class="stats-line stats-total" id="stats-total">总计 0 · 中文 0</div>
   </div>
   <div class="app">
+    <div class="browse-area">
+      <button class="browse-btn" id="browseBtn" type="button" aria-label="批量浏览">☰</button>
+    </div>
     <div class="fav-area">
       <span class="fav-source" id="favSource"></span>
       <button class="fav-btn" id="favBtn" type="button" aria-label="加入生词本" disabled>☆</button>
@@ -169,6 +172,37 @@ above 在…上方" spellcheck="false"></textarea>
       <div class="confirm-actions">
         <button id="confirmCancelBtn" class="ghost" type="button">取消</button>
         <button id="confirmOkBtn" class="primary" type="button">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Browse Mode Modal -->
+  <div id="browseModal" class="browse-overlay hidden" role="dialog" aria-modal="true" aria-label="批量浏览">
+    <div class="browse-panel">
+      <div class="browse-header">
+        <span class="browse-title" id="browseTitleEl">浏览词库</span>
+        <div class="browse-header-right">
+          <button id="browseAutoBtn" type="button" class="browse-toggle-btn" aria-pressed="false">自动</button>
+          <button id="browseCnToggle" type="button" class="browse-toggle-btn active" aria-pressed="true">中文</button>
+          <div class="browse-layout-toggle" role="group" aria-label="排列顺序">
+            <button type="button" class="browse-toggle-btn active" data-order="seq">顺序</button>
+            <button type="button" class="browse-toggle-btn" data-order="shuffle">乱序</button>
+          </div>
+          <div class="browse-layout-toggle" role="group" aria-label="布局方式">
+            <button type="button" class="browse-toggle-btn active" data-layout="grid">网格</button>
+            <button type="button" class="browse-toggle-btn" data-layout="list">列表</button>
+          </div>
+          <button id="browseCloseBtn" class="browse-close-btn" aria-label="关闭">×</button>
+        </div>
+      </div>
+      <div class="browse-body" id="browseBody"></div>
+      <div class="browse-footer">
+        <button id="browsePrevBtn" class="browse-nav-btn" type="button" aria-label="上一页">‹</button>
+        <div class="browse-footer-center">
+          <input type="range" id="browsePageSlider" class="browse-page-slider" min="1" max="1" value="1" step="1" aria-label="页码">
+          <span id="browsePageInfo" class="browse-page-info"></span>
+        </div>
+        <button id="browseNextBtn" class="browse-nav-btn" type="button" aria-label="下一页">›</button>
       </div>
     </div>
   </div>
