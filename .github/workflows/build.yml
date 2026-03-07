@@ -66,7 +66,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist-pages
-          cp index.html style.css app.js sw.js words-*.js* manifest.webmanifest dist-pages/
+          cp index.html style.css app.js sw.js words-*.json manifest.webmanifest dist-pages/
+          cp tesseract.min.js tesseract.worker.min.js dist-pages/
+          cp -r tessdata tesseract-core dist-pages/
           touch dist-pages/.nojekyll
 
       - name: Setup Pages

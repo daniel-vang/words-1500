@@ -31,13 +31,20 @@
       </div>
 
       <div class="controls">
-        <button id="micBtn" class="mic-toggle" type="button" aria-pressed="false">麦克风</button>
-        <div class="list-toggle" role="group" aria-label="词库选择">
-          <button type="button" class="toggle-btn active" data-file="words-1500.json">初中1500</button>
-          <button type="button" class="toggle-btn" data-file="words-3000.json">初中3000</button>
-          <button type="button" class="toggle-btn" data-file="words-3500.json">高中3500</button>
-        </div>    
-        <button id="autoBtn" class="help-toggle" title="自动切换">自动</button>  
+        <button id="micBtn" class="mic-toggle" type="button" aria-pressed="false">麦克</button>
+        <button id="importBtn" class="help-toggle" type="button" title="导入自定义词库">导入</button>
+        <div class="word-list-wrapper">
+          <select id="wordListSelect" aria-label="词库选择" style="display:none">
+            <optgroup label="内置词库">
+              <option value="words-1500.json">初中1500</option>
+              <option value="words-3000.json">初中3000</option>
+              <option value="words-3500.json">高中3500</option>
+            </optgroup>
+          </select>
+          <button type="button" id="wordListBtn" class="word-list-select word-list-btn" aria-haspopup="listbox" aria-expanded="false"></button>
+          <div class="word-list-popup hidden" id="wordListPopup" role="listbox"></div>
+        </div>
+        <button id="autoBtn" class="help-toggle" title="自动切换">自动</button>
         <button id="helpBtn" class="help-toggle" type="button" aria-pressed="false">帮助</button>
       </div>
 
@@ -55,9 +62,113 @@
     <div class="touch-area" data-zone="br" data-label="下一个" id="touch-br"></div>
   </div>
 
-  <script src="words-1500.js"></script>
-  <script src="words-3000.js"></script>
-  <script src="words-3500.js"></script>
+  <!-- Import Word List Modal -->
+  <div id="importModal" class="import-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="importModalTitle">
+    <div class="import-modal-body">
+      <div class="import-header">
+        <h2 id="importModalTitle" class="import-title">导入词库</h2>
+        <button id="importCloseBtn" class="import-close" aria-label="关闭">×</button>
+      </div>
+
+      <div class="import-modal-content">
+
+      <!-- Step 1: Input -->
+      <div id="importStep1" class="import-step">
+        <div class="import-tabs" role="tablist">
+          <button class="import-tab active" role="tab" aria-selected="true" data-tab="text">✏️ 输入/粘贴</button>
+          <button class="import-tab" role="tab" aria-selected="false" data-tab="photo">📷 拍照识别</button>
+        </div>
+
+        <!-- Text tab -->
+        <div id="textTab" class="import-tab-panel">
+          <p class="import-hint">
+            每行一个单词，支持常见格式：<br>
+            <code>ability 能力</code>　<code>able: 能够</code>　<code>above&Tab;在…上面</code><br>
+            也可直接粘贴包含音标的完整格式。
+          </p>
+          <textarea id="importTextarea" class="import-textarea" placeholder="在此粘贴或输入单词列表...
+
+例：
+ability 能力
+able 能够;有能力的
+above 在…上方" spellcheck="false"></textarea>
+        </div>
+
+        <!-- Photo tab -->
+        <div id="photoTab" class="import-tab-panel hidden">
+          <div id="photoDropzone" class="photo-dropzone">
+            <div class="photo-placeholder" id="photoPlaceholder">
+              <span class="photo-icon">📷</span>
+              <p>点击选择照片或拍照</p>
+              <p class="import-hint">建议拍摄清晰的课本单词列表页面</p>
+            </div>
+            <img id="photoPreview" class="photo-preview hidden" alt="预览照片" />
+            <input type="file" id="photoInput" accept="image/*" capture="environment" class="photo-input-hidden" aria-label="选择图片" />
+          </div>
+          <div class="photo-actions">
+            <button id="changePhotoBtn" class="ghost hidden" type="button">更换照片</button>
+            <button id="ocrBtn" class="primary hidden" type="button">开始识别</button>
+          </div>
+          <p id="ocrHint" class="import-hint ocr-hint-network hidden">
+            💡 首次识别稍慢请耐心等待
+          </p>
+          <div id="ocrProgress" class="ocr-progress hidden">
+            <div class="ocr-progress-bar"><div id="ocrProgressFill" class="ocr-progress-fill"></div></div>
+            <span id="ocrProgressText">正在识别…</span>
+          </div>
+        </div>
+
+        <div class="import-step-actions">
+          <button id="parseBtn" class="primary" type="button">解析单词</button>
+        </div>
+      </div>
+
+      <!-- Step 2: Edit & Save -->
+      <div id="importStep2" class="import-step hidden">
+        <div class="import-edit-header">
+          <span id="parsedCount" class="parsed-count">识别出 0 个单词</span>
+          <button id="addWordBtn" class="ghost import-add-btn" type="button">＋ 添加行</button>
+        </div>
+        <div class="import-word-table-wrap">
+          <table class="import-word-table">
+            <thead>
+              <tr><th>英文</th><th>中文</th><th></th></tr>
+            </thead>
+            <tbody id="wordTableBody"></tbody>
+          </table>
+        </div>
+        <div class="import-name-row">
+          <label for="listNameInput" class="import-label">词库名称</label>
+          <input type="text" id="listNameInput" class="import-name-input" placeholder="我的词库" maxlength="20" />
+        </div>
+        <div class="import-step-actions">
+          <button id="backToStep1Btn" class="ghost" type="button">返回</button>
+          <button id="saveListBtn" class="primary" type="button">保存并练习</button>
+        </div>
+      </div>
+
+      <!-- Manage saved lists -->
+      <div id="savedListsSection" class="saved-lists-section hidden">
+        <div class="saved-lists-header">已保存词库</div>
+        <div id="savedListsContainer" class="saved-lists-container"></div>
+      </div>
+
+      </div><!-- end .import-modal-content -->
+    </div>
+  </div>
+
+  <!-- Custom confirm dialog -->
+  <div id="confirmDialog" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="confirmMsg">
+    <div class="confirm-box">
+      <p id="confirmMsg" class="confirm-msg"></p>
+      <div class="confirm-actions">
+        <button id="confirmCancelBtn" class="ghost" type="button">取消</button>
+        <button id="confirmOkBtn" class="primary" type="button">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="tesseract.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

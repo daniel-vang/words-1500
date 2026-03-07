@@ -10,8 +10,12 @@
     "dist:win": "electron-builder --win --publish=never"
   },
   "devDependencies": {
+    "@tesseract.js-data/chi_sim": "^1.0.0",
+    "@tesseract.js-data/eng": "^1.0.0",
     "electron": "^29.4.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "tesseract.js": "^7.0.0",
+    "tesseract.js-core": "^7.0.0"
   },
   "build": {
     "appId": "com.words1500.app",
@@ -27,10 +31,16 @@
       "words-*.js",
       "words-*.json",
       "*.txt",
-      "electron-main.js"
+      "electron-main.js",
+      "tesseract.min.js",
+      "tesseract.worker.min.js",
+      "tessdata/**",
+      "tesseract-core/**"
     ],
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "category": "public.app-category.education",
       "extendInfo": {
         "NSMicrophoneUsageDescription": "This app needs microphone access to check spoken answers."
@@ -40,7 +50,9 @@
       "target": [
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     }
